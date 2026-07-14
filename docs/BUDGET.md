@@ -9,15 +9,35 @@ what isn't.
 **If you are a Claude session about to provision a new AWS resource type: check this file first.
 If the service/action isn't in the "in active use" list below, don't assume it's free — ask.**
 
+**Scope: this applies to the platform/landing-zone itself and its shared accounts (management,
+security, infrastructure) and to `personal-ai-cloud`** — not retroactively to already-established
+products with their own separate cost model. `hcp-terrorgems-prod` (TerrorGems) is a real product
+with its own already-decided, phased cost plan and currently runs real spend (WAF, KMS,
+Secrets Manager — confirmed via a live Cost Explorer check: ~$4.55/month WAF + ~$1.70/month KMS +
+~$0.68/month Secrets Manager, entirely attributable to that one account). That's expected and
+out of scope for this file — don't "fix" TerrorGems' spend as if it were a platform violation.
+
 ## In active use today (all free-tier-safe at current scale)
 
-Lambda, API Gateway, S3, CloudFront, DynamoDB, SNS, SQS, Secrets Manager, IAM, STS, CloudFormation
-(including StackSets — the service itself is free, only the resources it deploys can cost money),
-Route53, ACM (public certs are free), KMS (see the one named exception below), native S3
-conditional-writes state locking (`use_lockfile = true` — no DynamoDB lock table, avoiding that
-cost entirely), AWS Organizations (SCPs are free), AWS Budgets (first 2 budgets/account free), IAM
-Identity Center / SSO (free), CloudTrail (management events are free; data events cost — not
-currently enabled).
+Lambda, API Gateway, S3, CloudFront, DynamoDB, SNS, SQS, IAM, STS, CloudFormation (including
+StackSets — the service itself is free, only the resources it deploys can cost money), Route53,
+ACM (public certs are free), native S3 conditional-writes state locking (`use_lockfile = true` —
+no DynamoDB lock table, avoiding that cost entirely), AWS Organizations (SCPs are free), AWS
+Budgets (first 2 budgets/account free), IAM Identity Center / SSO (free), CloudTrail (management
+events are free; data events cost — not currently enabled).
+
+**Two real, named, small-but-nonzero exceptions** — not free, kept anyway, documented so nobody
+re-discovers them by surprise in a Cost Explorer bill:
+
+- **KMS (customer-managed key)** — see below.
+- **AWS Secrets Manager** — ~$0.40/secret/month, **not** free-tier-eligible. Kept to one secret
+  per org per account (`github/{org}/config`, a JSON blob — see [SECRETS.md](SECRETS.md)) rather
+  than one secret per value, after finding the original 6-secrets-per-org design would have cost
+  6x that. Real management-account spend confirmed via Cost Explorer:
+  ~$0.23/month today (partial-month, will settle around $0.40/month once fully billed for the one
+  consolidated secret) — small, accepted, not eliminated (SSM Parameter Store's free tier is an
+  option for non-sensitive values, not pursued this round since the consolidation already got the
+  real cost down to a level not worth the extra architectural complexity).
 
 ## The one named, accepted exception: customer-managed KMS key
 
