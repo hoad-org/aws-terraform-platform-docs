@@ -137,8 +137,17 @@ guardrail against a **future Claude session "helpfully" enabling them** — see
 [SECURITY_BASELINE.md](SECURITY_BASELINE.md) for why they're off by design, and
 [SECURITY_ROADMAP.md](SECURITY_ROADMAP.md) for when to turn them on.
 
-**Status of this SCP**: drafted and safe-tested (`aws organizations create-policy` — creates but
-doesn't attach; `aws iam simulate-custom-policy` against the existing workload CI role policies to
-confirm no collision with anything in active use). Attaching it to the Workloads OU is a deliberate
-step, done once, not silently — check `PROVENANCE.md`/git history in this repo for whether it's
-actually attached yet before assuming it is.
+**Status of this SCP**: created (not attached to any OU) — `aws organizations create-policy`,
+policy ID `p-5i30zmvq`. `aws iam simulate-custom-policy` — the natural tool to test this against
+real role policies before attaching — **doesn't actually support Service Control Policies at all**
+(a real AWS limitation, confirmed live: it rejects any SCP-shaped document, even a single-statement
+one, with `InvalidInput`; the IAM Policy Simulator is built for identity/resource-based policies
+only, there's no official SCP simulator). Verified manually instead: none of the real, deployed
+role policies in this estate (the seed repo's `workloads_oidc_policy`, `personal-ai-cloud`'s
+`apply_policy`) grant any action this SCP denies — the closest overlap is `workloads_oidc_policy`'s
+broad `ec2:*`, which this SCP would narrow (blocking NAT Gateway creation and non-free-tier
+instance types specifically) without breaking anything currently exercised, since nothing in this
+estate actually runs EC2 instances today (it's Lambda-based). Attaching it to the Workloads OU is a
+deliberate step, done once, not silently, staged Prod-first then NonProd per the plan this SCP was
+drafted under — check `PROVENANCE.md`/git history in this repo for whether it's actually attached
+yet before assuming it is.
