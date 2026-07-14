@@ -60,6 +60,14 @@ must instruct Claude to update the relevant file(s) in `rhyscraig/aws-terraform-
 before considering AWS-platform-affecting work complete. See each repo's own CLAUDE.md for the
 exact instruction text — the canonical wording lives in this repo's own root `README.md`.
 
+**Audit status**: this guardrail is now in every `aws-terraform-*` repo's `CLAUDE.md` that's
+locally cloneable — `aws-terraform-platform-seed`, `aws-accounts`, `aws-baselines`, `aws-org`,
+`aws-terraform-solutions-terrorgems-platform`, `aws-terraform-solutions-websites`,
+`aws-terraform-solutions-craighoad-blog`, `hoad-org/personal-ai-cloud`,
+`hoad-org/github-automation` (9 repos, each its own PR, none merged yet — check each repo's own
+open PRs before assuming this is live everywhere). `craighoad-portfolio-website` wasn't locally
+cloned this session, not yet audited.
+
 ## Known cross-repo inconsistencies found during the audit that produced this documentation
 
 These are real, live discrepancies found while writing this documentation — not resolved yet,
