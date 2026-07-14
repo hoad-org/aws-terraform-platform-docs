@@ -54,10 +54,18 @@ leave those statements dangling without a coordinated follow-up across at least 
 is ever revisited, grep the whole estate for `Resource = [var.shared_kms_key_arn]`-shaped
 statements first — don't assume this is the only dependent.
 
-## Guardrails — enforced at the IAM layer, not just in prose here
+## Guardrails — enforced at the IAM/billing layer, not just in prose here
 
-An AWS Budget with a low threshold (e.g. $5) and an SNS/email alert is configured on the
-management account — pure monitoring, catches genuine cost drift regardless of what caused it.
+**Two AWS Budgets are live** (`aws budgets describe-budgets --account-id 395101865577`):
+- `global-monthly-budget` — pre-existing, $50/month limit across the whole org, alerts at 90%
+  actual / 100% forecasted, email to `craighoad+billing@hotmail.com`. Covers everything including
+  `hcp-terrorgems-prod`'s legitimate product spend.
+- `platform-monthly-budget` — created this session, **$5/month limit, scoped by `LinkedAccount`
+  cost filter to just the platform accounts** (management, hcp-audit, hcp-log-archive,
+  hcp-shared-services, hcp-craighoad-prod, hcp-qa — deliberately excludes
+  `hcp-terrorgems-prod`), alerts at 80% actual / 100% forecasted, same email. This is the one that
+  actually watches the $0 goal in this file — real spend at creation time was $1.31/month actual,
+  $2.15/month forecasted (see the Secrets Manager section above for what that is).
 
 A Service Control Policy denies the specific, well-known-costly services/actions below at the
 **Workloads OU** (Prod + NonProd) — deliberately not at root, so Management/Security/Infrastructure
