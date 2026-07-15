@@ -13,12 +13,13 @@ One bucket, one KMS key, shared by every repo in the estate — management-accou
 alike. Workloads-account repos reach it via a **cross-account bucket policy + KMS key grant**
 naming their specific plan/apply role ARNs (see [CICD_ROLES.md](CICD_ROLES.md)).
 
-## State key prefix convention — every repo declares its own, nothing hardcoded in workflow YAML
+## State key prefix convention — one real exception, not aspirational
 
-**The rule**: a repo's Terraform state key prefix is declared **once**, in that repo's own config
-file (`configs/orgs/<org>.tfvars` or equivalent) — never hardcoded into `.github/workflows/*.yaml`.
-The workflow reads the prefix from config and passes it through to `terraform init -backend-config`.
-Hardcoding a prefix into a reusable workflow defeats the entire point of it being reusable.
+**The rule for most repos**: a repo's Terraform state key prefix is declared **once**, in that
+repo's own config file (`configs/orgs/<org>.tfvars` or equivalent) — never hardcoded into
+`.github/workflows/*.yaml`. The workflow reads the prefix from config and passes it through to
+`terraform init -backend-config`. Hardcoding a prefix into a reusable workflow defeats the entire
+point of it being reusable.
 
 **The prefix shape** — two conventions, for two different classes of repo:
 
@@ -31,10 +32,21 @@ workloads/<account-name>/<repo-short-name>/terraform.tfstate       # workloads-a
 consistently used today** by `aws-terraform-platform-aws-accounts`, `-aws-baselines`, and
 `-aws-org` (confirmed by reading each repo's actual `backend.tf` directly — e.g. `aws-accounts`
 uses key `hcp/prd/platform/aws-accounts/eu-west-1/terraform.tfstate`). Keep using it for any new
-management-account repo — don't invent a third scheme. The **one exception** is the seed repo
-itself, whose state key is the pre-existing `myorg/aws/control-plane/terraform.tfstate` — a rename
-to match this convention is tracked as follow-up work (requires a real backend/state migration,
-not just a config edit), not yet done.
+management-account repo — don't invent a third scheme.
+
+**The real exception: the seed repo itself does NOT follow this convention, and can't without a
+shared-workflow change.** `hoad-org/github-automation`'s `reusable-tf-plan-encrypt.yaml` hardcodes
+the seed's own state key formula directly in its `terraform init -backend-config` step:
+`${ORG}/${PARTITION}/control-plane/terraform.tfstate` (not read from any per-repo config value —
+a genuine, deliberate exception to the "declared once in config" rule above, scoped to the one
+repo that IS the shared backend). Originally this computed to `myorg/aws/control-plane/...` (a
+stale literal "myorg" segment predating the org's real short name being set to "hcp"), which
+didn't match `${ORG}` ("hcp") at all — meaning the first real CI run would have hit an empty state
+and tried to recreate the OIDC provider, all 3 roles, the KMS key, and both S3 buckets from
+scratch. Migrated for real (`terraform init -migrate-state -force-copy`) to
+`hcp/aws/control-plane/terraform.tfstate`, matching what the reusable workflow actually computes.
+Don't "fix" this to match the `hcp/prd/platform/seed/...` convention below without first changing
+the hardcoded key in the reusable workflow — the two must always match exactly.
 
 **Workloads-account repos** (`workloads/<account-name>/...`) — this convention is **new, not yet
 implemented anywhere**, `<account-name>` is the account's friendly/domain name (`craighoad.com`,
@@ -49,7 +61,7 @@ and `website` both deploy into `hcp-craighoad-prod`).
 | `aws-terraform-platform-aws-accounts` | management | `hcp/prd/platform/aws-accounts/eu-west-1/terraform.tfstate` | live |
 | `aws-terraform-platform-aws-baselines` | management | `hcp/prd/platform/aws-baselines/eu-west-1/terraform.tfstate` | live |
 | `aws-terraform-platform-aws-org` | management | `hcp/prd/platform/aws-org/eu-west-1/terraform.tfstate` | live |
-| `aws-terraform-platform-seed` | management | `myorg/aws/control-plane/terraform.tfstate` | live, pre-dates convention, rename tracked as follow-up |
+| `aws-terraform-platform-seed` | management | `hcp/aws/control-plane/terraform.tfstate` | live — hardcoded in the reusable workflow, not this convention (see above), migrated from stale `myorg/...` |
 | `personal-ai-cloud` | hcp-craighoad-prod | `workloads/craighoad.com/personal-ai-cloud/terraform.tfstate` | **target** — currently `hcp/prd/personal-ai-cloud/*` (ad-hoc, in the seed repo's cross-account bucket policy) |
 | `website-static-html-craighoad.com` | hcp-craighoad-prod | `workloads/craighoad.com/website/terraform.tfstate` | target |
 | `aws-terraform-solutions-craighoad-blog` | hcp-craighoad-prod | `workloads/craighoad.com/blog/terraform.tfstate` | target |

@@ -7,15 +7,79 @@ never one broad combined role:
 
 | Role | Purpose | Trust condition | Permissions |
 |---|---|---|---|
-| **plan** | `terraform plan` — read-only | `repo:{owner}/{repo}:ref:refs/heads/main` (no approval gate — runs on every push) | AWS-managed `ReadOnlyAccess` + a narrow custom policy: state-lock S3 object R/W (not real state writes — just the native S3 lock file), `kms:Decrypt` on the state key, `sts:AssumeRole` on the member CICD role pattern only, audit-log S3 write to one prefix, `sts:GetCallerIdentity`, and `secretsmanager:GetSecretValue`/`DescribeSecret` scoped to `secret:github/{org}/*` (AWS's `ReadOnlyAccess` deliberately excludes secret *values*) |
-| **apply** | `terraform apply` — write | `repo:{owner}/{repo}:environment:{env}-approve` (a GitHub Environment with required reviewers — the environment itself is the approval gate) | Full write access to the specific AWS services that repo's Terraform manages — scoped per-repo, not blanket `*:*` |
+| **plan** | `terraform plan` — read-only, AND every job's `get-aws-secrets` call (see below) | multiple subjects, see next section — not just `ref:refs/heads/main` | AWS-managed `ReadOnlyAccess` + a narrow custom policy: state-lock S3 object R/W (not real state writes — just the native S3 lock file), `kms:Decrypt` on the state key, `sts:AssumeRole` on the member CICD role pattern only, audit-log S3 write to one prefix, `sts:GetCallerIdentity`, and `secretsmanager:GetSecretValue`/`DescribeSecret` scoped to `secret:github/{org}/*` (AWS's `ReadOnlyAccess` deliberately excludes secret *values*) |
+| **apply** | `terraform apply` — write, real infrastructure mutation | `repo:{owner}/{repo}:ref:refs/heads/main` — see next section for why this isn't environment-scoped | Full write access to the specific AWS services that repo's Terraform manages — scoped per-repo, not blanket `*:*` |
 | **module-skills** (optional) | Non-infra pipelines (test runners, Claude skills, analytics) | `repo:{owner}/{repo}:environment:*` or wildcard subjects, only created when actually needed | Audit-log write + KMS for that write + caller-identity only — zero state/IAM access, smallest possible blast radius |
 
-**Why a role split, not one role for everything**: separation of duties. A compromised or
-misconfigured plan-phase token (which runs on every push, unattended) can never mutate real
-infrastructure — it's mathematically incapable of it, not just conventionally discouraged. Only
-a token from the gated `-approve` environment, which requires a human reviewer to click approve,
-can assume the apply role.
+**Why a role split, not one role for everything**: separation of duties. Even though (see below)
+the `-approve` GitHub Environment can't enforce a real required-reviewer gate at $0 cost, the plan
+role is still permanently, structurally incapable of mutating real infrastructure — a compromised
+or misconfigured plan-phase token (which runs on every push, unattended) can read state and
+secrets but can never write. That's a real, load-bearing security boundary independent of whatever
+the approval-gate story is for a given billing tier.
+
+## The real OIDC subject list — derived empirically, not from first principles
+
+**`get-aws-secrets` always authenticates as the *plan* role**, unconditionally, in every reusable
+workflow that calls it (checkov-scan, quality-gate, plan-encrypt, apply-decrypt, approve-gate,
+audit) — regardless of which role that job's real Terraform action ultimately needs. This one fact
+drives the whole subject list, and it's easy to get wrong by reasoning from the job names instead
+of testing each stage for real:
+
+```
+github_oidc_plan_subjects = [
+  "repo:{owner}/{repo}:ref:refs/heads/main",       # checkov-scan, quality-gate, apply-decrypt,
+                                                     # audit - none of these set `environment:`
+  "repo:{owner}/{repo}:environment:{org}",          # plan-encrypt sets `environment: ${{ inputs.org }}`
+  "repo:{owner}/{repo}:environment:{org}-approve",  # approve-gate sets `environment: ${{ inputs.apply_env }}`,
+                                                     # and reusable-tf-parse-config.yaml computes
+                                                     # apply_env as "${org}-approve" - use that exact
+                                                     # value, not a hand-picked environment name
+]
+
+github_oidc_apply_subjects = [
+  "repo:{owner}/{repo}:ref:refs/heads/main",  # apply-decrypt's REAL terraform-apply step
+                                                # (a second, separate AssumeRole using the
+                                                # oidc_apply_role_arn secret) - this job
+                                                # deliberately sets no `environment:`, so its
+                                                # sub claim is the plain ref, not an
+                                                # environment-scoped one
+]
+```
+
+A tempting-but-wrong mental model is "plan role trusts the plan ref, apply role trusts the approve
+environment" — that's not what the code actually does. Verify against the real reusable workflow
+files in `hoad-org/github-automation`, not this description, if they've changed since this was
+written: search each `.github/workflows/reusable-tf-*.yaml` for `environment:` at the job level.
+
+## GitHub Environment protection at $0 — a real, hard billing limitation
+
+GitHub's environment protection rules — **both** required reviewers **and** wait timer — require a
+paid plan (GitHub Pro/Team/Enterprise) on a *private* repository. Confirmed live: both return
+`"Please ensure the billing plan supports the ... protection rule"` (HTTP 422) on this org's actual
+free-tier billing. This means the `{org}-approve` GitHub Environment **cannot** enforce a real
+mid-run pause for human review at $0 cost — despite what earlier documentation (and the reference
+this design was adapted from, which assumes a paid plan) implied.
+
+**The $0-tier substitute gate**: `deploy.yaml` triggers on `workflow_dispatch` only — deliberately
+no `push: branches: [main]` trigger. A merge to `main` does *not* automatically deploy; someone
+with write access must explicitly start the run. That's real (only repo write-access holders can
+invoke `workflow_dispatch`) but weaker than a true mid-run pause — once started, the run proceeds
+through Plan → Approve → Apply with no way to stop and review the plan output first inside that
+same run. Compensating control: `pr-validate.yml` runs the same Trivy/Checkov/Quality-Gate/Plan
+gates on every PR *before* merge, so by the time someone triggers `workflow_dispatch` the plan has
+already been seen once. See [SECURITY_ROADMAP.md](SECURITY_ROADMAP.md) for the upgrade once
+there's a paid plan.
+
+## Single source of truth: `reusable-tf-parse-config.yaml`
+
+Don't hardcode `aws_region`/`aws_account_id`/`partition`/`apply_env` as literal strings in a
+`deploy.yaml`'s job `with:` blocks — every one of those is a duplicate of a value that already
+lives in `configs/orgs/{org}.tfvars`, and duplicated values drift (this repo's own `deploy.yaml`
+did exactly that for its first several revisions). Add a `plan_parse-config` job as the first job
+in the workflow (`uses: .../reusable-tf-parse-config.yaml@main`, `with: {org: <org>}`), and have
+every other job read `needs.plan_parse-config.outputs.*` instead. This is the pattern the
+reference `deploy-orchestrated.yml` this design is adapted from uses throughout.
 
 ## Naming formula (load-bearing — must match exactly)
 
