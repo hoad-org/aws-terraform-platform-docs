@@ -35,7 +35,7 @@ is the actual redesign work — not a green-field build.**
 | `aws-terraform-platform-seed` | rhyscraig | ✅ | `github-automation` (new, this session) | `myorg/aws/control-plane/terraform.tfstate` | new workflow, untriggered | **Yes** — `configs/orgs/{bt-avm,bt-dev,fdr-cmc,fdr-gvc}.tfvars` (deleted this session, PR open), README/AI.md still reference BT clone URLs (not yet fixed) |
 | `aws-terraform-platform-docs` | rhyscraig | n/a | n/a | n/a | n/a | this repo |
 | `aws-terraform-platform-aws-accounts` | hoad-org | ✅ | old `aws-workflows` + `AWS_CI_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-accounts/eu-west-1/terraform.tfstate` | drift-check red (3+ failures) | **git history only** — `aws-avm-{audits,security,shared-svcs}@beyondtrust.com`, author `choadbt <choad@beyondtrust.com>` |
-| `aws-terraform-platform-aws-baselines` | rhyscraig | ✅ | old `aws-workflows` + `AWS_CI_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-baselines/eu-west-1/terraform.tfstate` (+ a likely-dead second backend block in a nested module) | drift_check red (5/5 failures) | none in current tree |
+| `aws-terraform-platform-aws-baselines` | rhyscraig | ✅ | old `aws-workflows` + `AWS_CI_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-baselines/eu-west-1/terraform.tfstate` (second dead backend block confirmed and removed — PR #5, ADR-0001) | drift_check red (5/5 failures) | none in current tree |
 | `aws-terraform-platform-aws-org` | hoad-org | ✅ | old `aws-workflows` + `AWS_OIDC_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-org/eu-west-1/terraform.tfstate` | drift-check red (5/5 failures, every 4h) | **git history only** — author `choadbt <choad@beyondtrust.com>` |
 | `aws-terraform-platform-aws-templates` | rhyscraig | ✅ | old `aws-workflows` + `SEED_ROLE_ARN`/`TF_STATE_BUCKET`/etc | via `-backend-config`; `.tfctl.yml` cites a **different management account** (`235494790978`) than everywhere else (`395101865577`) — unresolved discrepancy | no real deploy runs in recent history | ambiguous — `.tfctl.yml` bucket pattern `bt-terraform-remote-state-{region}` |
 | `aws-terraform-platform-aws-modules` | rhyscraig | ✅ | old `aws-workflows`, no deploy (pure module catalog) | none (no backend anywhere — correct, it's a module registry) | green (Dependabot only) | none |
@@ -69,17 +69,18 @@ These aren't `aws-terraform-*` repos, but they're actively used to operate this 
 making a unilateral call, since "is it OK to keep running a tool whose own README claims it's for
 BeyondTrust-internal use only" is a real, non-technical judgment call.
 
-## Stale OIDC trust subjects — cheap to fix, currently harmless but confusing
+## Stale OIDC trust subjects — fixed
 
-The seed repo's `github_oidc_subjects` list (the legacy combined-role trust list) has two entries
-referencing renamed/moved repos that will never match a real token again:
-- `repo:rhyscraig/aws-terraform-solutions-terrorgem:*` — the real repo is now
+The seed repo's `github_oidc_subjects` list (the legacy combined-role trust list) had two entries
+referencing renamed/moved repos that would never match a real token again — removed:
+- `repo:rhyscraig/aws-terraform-solutions-terrorgem:*` — the real repo is
   `aws-terraform-solutions-terrorgems-platform` (renamed).
-- `repo:rhyscraig/website-static-html-craighoad.com:*` — the real repo is now
-  `hoad-org/craighoad-portfolio-website` (renamed **and** transferred org).
+- `repo:rhyscraig/website-static-html-craighoad.com:*` — the real repo is
+  `hoad-org/craighoad-portfolio-website` (renamed **and** transferred org, already trusted
+  separately under its real name).
 
-These don't grant excess access (a stale subject just never matches), but they should be corrected
-to the real current repo names — leaving them creates false confidence that those old names are
+These never granted excess access (a stale subject just never matches) — flagged here only so a
+future session doesn't waste time re-discovering that those old names are
 still meaningful.
 
 ## Naming convention violations

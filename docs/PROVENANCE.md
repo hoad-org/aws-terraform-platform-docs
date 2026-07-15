@@ -60,6 +60,14 @@ must instruct Claude to update the relevant file(s) in `rhyscraig/aws-terraform-
 before considering AWS-platform-affecting work complete. See each repo's own CLAUDE.md for the
 exact instruction text — the canonical wording lives in this repo's own root `README.md`.
 
+**Audit status**: this guardrail is now in every `aws-terraform-*` repo's `CLAUDE.md` that's
+locally cloneable — `aws-terraform-platform-seed`, `aws-accounts`, `aws-baselines`, `aws-org`,
+`aws-terraform-solutions-terrorgems-platform`, `aws-terraform-solutions-websites`,
+`aws-terraform-solutions-craighoad-blog`, `hoad-org/personal-ai-cloud`,
+`hoad-org/github-automation` (9 repos, each its own PR, none merged yet — check each repo's own
+open PRs before assuming this is live everywhere). `craighoad-portfolio-website` wasn't locally
+cloned this session, not yet audited.
+
 ## Known cross-repo inconsistencies found during the audit that produced this documentation
 
 These are real, live discrepancies found while writing this documentation — not resolved yet,
@@ -79,8 +87,12 @@ listed here so they're not lost. See [REPOS.md](REPOS.md) for per-repo detail.
    live `backend.tf` uses bucket `hcp-cmc-euw1-platform-tfstate-prd` / region `eu-west-1`, while
    `environments.yml` and `.tfctl.yml` in the same repos reference a different, apparently-stale
    bucket (`infra-tfstate-hoad-org-seed`) and inconsistent regions (`eu-west-2` in one file,
-   `us-east-1` in another). These look like dead/legacy config, not active drift, but haven't been
-   confirmed dead or removed.
+   `us-east-1` in another). **One instance confirmed and fixed**: `aws-baselines`' own
+   `terraform/security/versions.tf` had a second `backend "s3" {}` block naming this same bucket —
+   confirmed genuinely dead two ways (it's a child module, Terraform ignores backend blocks
+   outside the root; the bucket itself returns a live 404 on `head-bucket`) and removed (PR #5,
+   with ADR-0001). The `environments.yml`/`.tfctl.yml` references in `aws-accounts`/`aws-org` are
+   still unconfirmed dead-vs-live — same pattern, not yet independently checked in those two repos.
 3. **CI is red across the board**: `drift_check`/`drift-check` workflows in `aws-accounts`,
    `aws-baselines`, and `aws-org` are all failing on every scheduled run, consistently completing
    in 0 seconds — indicating a fast pre-flight failure (likely auth/OIDC), not real infrastructure
@@ -97,8 +109,15 @@ listed here so they're not lost. See [REPOS.md](REPOS.md) for per-repo detail.
    ("recent account payments have failed or your spending limit needs to be increased"). Simple to
    fix once noticed; flagged here because it's exactly the kind of thing this audit exists to
    surface, not because it's architecturally interesting.
-7. **Two stale OIDC trust subjects** in the seed repo's legacy `github_oidc_subjects` reference
-   repos by names that no longer exist (`aws-terraform-solutions-terrorgem` → renamed
-   `-terrorgems-platform`; `website-static-html-craighoad.com` → renamed and transferred to
-   `hoad-org/craighoad-portfolio-website`). Harmless (a stale subject just never matches a real
-   token) but should be corrected — see [REPOS.md](REPOS.md).
+7. **Two stale OIDC trust subjects** in the seed repo's legacy `github_oidc_subjects` — **fixed**:
+   removed the dead `aws-terraform-solutions-terrorgem`/`website-static-html-craighoad.com`
+   entries (renamed/transferred repos, already trusted separately under their real current
+   names).
+8. **The fabricated `organization_id`/OU IDs — fixed.** Real, live-queried values now in both this
+   doc and the seed repo's `configs/orgs/myorg.tfvars`. Writing the data did not itself apply the
+   StackSet — see [CICD_ROLES.md](CICD_ROLES.md).
+9. **Two repos were on `master`, not `main` — fixed.** `aws-terraform-platform-seed` and
+   `aws-terraform-solutions-craighoad-blog` renamed via GitHub's branch-rename API (open PRs
+   auto-retargeted, default-branch pointer moved atomically). The blog repo's OIDC subject updated
+   to match. See [PROCESS.md](PROCESS.md) for the "main only" guardrail this enforces going
+   forward.

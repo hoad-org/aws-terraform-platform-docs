@@ -14,7 +14,11 @@
 > the org ID's suffix, then propagated by copy-paste into `configs/orgs/myorg.tfvars` in multiple
 > repos. None of these IDs ever resolved to anything in the real Organization. Always verify
 > account/OU/org IDs via a live `aws organizations` call before writing them into a config file —
-> never copy them from a template, another repo, or an SSO URL.
+> never copy them from a template, another repo, or an SSO URL. **Fixed**: the seed repo's
+> `configs/orgs/myorg.tfvars` now has the real values shown below (org `o-h07s8pk406`, real OU
+> IDs) — this file and that one are consistent as of this writing. Writing the correct data did
+> **not** itself apply the CloudFormation StackSet against the corrected OUs — that stayed a
+> separate, deliberate decision, see [CICD_ROLES.md](CICD_ROLES.md).
 
 ## Account structure
 
@@ -57,6 +61,10 @@ IDs) directly into a real `terraform apply` without substituting real values fir
 **Repos**: every repo that provisions or manages AWS infrastructure via Terraform is prefixed
 `aws-terraform-*`. A repo that touches AWS but isn't Terraform-based, or isn't prefixed this way,
 is a naming-convention violation — see [REPOS.md](REPOS.md) for the current compliance list.
+
+**Branches**: `main` only, on every repo, no exceptions — see [PROCESS.md](PROCESS.md). Two repos
+(`aws-terraform-platform-seed`, `aws-terraform-solutions-craighoad-blog`) were found on `master`
+and renamed this session.
 
 **Terraform/AWS resource naming** (`name_prefix` in the seed repo's `locals.tf`):
 ```

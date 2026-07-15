@@ -22,35 +22,45 @@ never use).
 **What it does**:
 1. Derives the plan-role ARN: `arn:{partition}:iam::{aws_account_id}:role/{org}-{region_short}-platform-github-oidc-tf-plan-role`
 2. Authenticates via `aws-actions/configure-aws-credentials` against that role
-3. Fetches, from Secrets Manager under `github/{org}/*`:
+3. Fetches **one** Secrets Manager secret, `github/{org}/config` — a JSON object, parsed with
+   `jq` — containing all six values:
 
-| Secret name | Purpose |
+| Key in the JSON blob | Purpose |
 |---|---|
-| `github/{org}/tf-state-bucket` | State bucket name |
-| `github/{org}/tf-logs-bucket` | Logs bucket name |
-| `github/{org}/kms-key-id-alias` | KMS alias for state encryption |
-| `github/{org}/oidc-plan-role-arn` | This org's plan role ARN (redundant with the derived value, but explicit) |
-| `github/{org}/oidc-apply-role-arn` | This org's apply role ARN |
-| `github/{org}/plan-passphrase` | Legacy — plan-encryption passphrase, see "Known future improvement" below |
+| `tf-state-bucket` | State bucket name |
+| `tf-logs-bucket` | Logs bucket name |
+| `kms-key-id-alias` | KMS alias for state encryption |
+| `oidc-plan-role-arn` | This org's plan role ARN (redundant with the derived value, but explicit) |
+| `oidc-apply-role-arn` | This org's apply role ARN |
+| `plan-passphrase` | Legacy — plan-encryption passphrase, see "Known future improvement" below |
+
+**One secret, not six — this matters for cost, not just tidiness.** AWS Secrets Manager bills
+**per secret** (~$0.40/secret/month), not per value inside it. The original design used 6 separate
+secrets per org; found via a real AWS Cost Explorer check to be a real, avoidable conflict with
+the [$0/month budget](BUDGET.md) — 6 secrets cost 6x what one JSON blob with the same 6 keys
+costs. Consolidated this session; every output this action produces is unchanged, only the
+storage format underneath.
 
 Plus one **non-org-scoped, shared** secret: `github/github-automation/pat-token` — a GitHub PAT
-for private Terraform module access, fetched only if `require_github_token != "false"`.
+for private Terraform module access, fetched only if `require_github_token != "false"`. This one
+was already a single secret shared across every org — no consolidation needed.
 
 **Outputs**: `tf_state_bucket`, `tf_logs_bucket`, `kms_key_id_alias`, `oidc_plan_role_arn`,
 `oidc_apply_role_arn`, `plan_passphrase`, `github_token` — all masked in logs.
 
-**Fails loudly, not silently**: every one of the 6 org-scoped secrets is validated non-empty and
-the action `exit 1`s with a specific message naming exactly which secret failed to resolve, rather
-than letting a missing secret surface two steps later as a confusing generic AWS error.
+**Fails loudly, not silently**: every one of the 6 keys is validated non-empty and the action
+`exit 1`s with a specific message naming exactly which key was missing from the JSON blob, rather
+than letting a missing value surface two steps later as a confusing generic AWS error.
 
 ## Who writes these secrets
 
-**Each account's own Terraform writes its own `github/{org}/*` secrets** — there is no central
+**Each account's own Terraform writes its own `github/{org}/config` secret** — there is no central
 "secrets bootstrap" step run by hand. The seed repo's `seed-terraform/secrets.tf` writes the
-management account's secrets; a workloads-account repo (if it owns its own one-hop OIDC roles,
-see [CICD_ROLES.md](CICD_ROLES.md)) writes its own. `random_password.plan_passphrase` generates
-the passphrase; everything else comes from `terraform-aws-modules` outputs already computed
-elsewhere in that repo's Terraform.
+management account's secret; a workloads-account repo (if it owns its own one-hop OIDC roles, see
+[CICD_ROLES.md](CICD_ROLES.md)) writes its own — `personal-ai-cloud`'s `secrets.tf` does this,
+using `jsonencode()` over the same 6-key local map before it's ever applied. `random_password.
+plan_passphrase` generates the passphrase; everything else comes from `terraform-aws-modules`
+outputs already computed elsewhere in that repo's Terraform.
 
 ## Known future improvement: retire `PLAN_PASSPHRASE`
 
