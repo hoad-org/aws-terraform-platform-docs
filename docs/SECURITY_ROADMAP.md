@@ -12,6 +12,7 @@ proactively, not "because it'd be nice." Each item costs real money the moment i
 | **WAF** | A workload starts taking real, unauthenticated public traffic at meaningful volume (not just Craig's own personal use) | Per-request cost only makes sense once there's traffic worth protecting |
 | **VPC Flow Logs (persistent)** | A real security incident, or a compliance requirement, needs network-level audit trail | Ongoing CloudWatch Logs cost; enable case-by-case for debugging today, persistent only once justified |
 | **Macie** | Hosting real personal data (not synthetic/test data) at meaningful volume | Scanning cost scales with data volume — not worth it until there's real data to worry about |
+| **GitHub Pro/Team** (~£3-4/user/month) | More than one person can trigger a deploy, or an apply needs to survive a moment of bad judgement, not just a deliberate bad click | Unlocks real GitHub Environment protection rules (required reviewers, wait timer) on private repos — today's `workflow_dispatch`-only trigger is a real but weaker substitute gate (see [CICD_ROLES.md](CICD_ROLES.md)) |
 
 **A concrete trigger worth naming explicitly, since it's the most likely one for this estate**:
 once `personal-ai-cloud` or any successor starts hosting AI access to data beyond Craig's own
