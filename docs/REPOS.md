@@ -121,15 +121,42 @@ different config files for the same environment, in the same repo, in multiple r
 
 ## Per-repo migration checklist (for any repo not yet on the target model)
 
+Every item below is something that actually broke a real deploy.yaml run while building the seed
+repo's own pipeline — this isn't a theoretical checklist, each line is load-bearing.
+
 - [ ] State key matches [BACKEND.md](BACKEND.md)'s convention, declared in a config file, not
-      hardcoded in workflow YAML
+      hardcoded in workflow YAML (the seed repo itself is the one deliberate exception — see
+      BACKEND.md)
+- [ ] `deploy.yaml`'s first job is `plan_parse-config` (`reusable-tf-parse-config.yaml`) — every
+      other job reads `needs.plan_parse-config.outputs.*` for `aws_region`/`aws_account_id`/
+      `partition`/`apply_env`, none of them hardcoded as literals. Add `pr-validate.yml` alongside
+      it (same gates, no approve/apply/audit) — see `aws-terraform-platform-seed`'s copy of both
+      files for the exact pattern to replicate.
 - [ ] Workflow calls `hoad-org/github-automation`'s reusable workflows and `get-aws-secrets`, not
       `aws-terraform-platform-aws-workflows` (either org) or raw GitHub secrets
+- [ ] `checkov-scan`/`quality-gate`/`plan-encrypt`/`apply-decrypt` all pass
+      `require_github_token: "false"` **unless the repo genuinely has private git-sourced
+      Terraform modules** — omitting this means every one of those jobs fails on the
+      never-created `github/github-automation/pat-token` secret. `approve-gate`/`audit` never need
+      it at all (hardcoded false inside those reusable workflows, not a caller-facing input).
 - [ ] No `secrets.*` reference to `SEED_ROLE_ARN`, `AWS_CI_ROLE_ARN`, `AWS_OIDC_ROLE_ARN`,
-      `TF_STATE_BUCKET`, `KMS_KEY_ID`, or `PLAN_PASSPHRASE` anywhere in the repo's workflows
-- [ ] Repo's OIDC subjects live in the seed repo's `github_oidc_plan_subjects`/
-      `github_oidc_apply_subjects` (not the legacy combined `github_oidc_subjects`), using the
-      repo's **current** name/org, not a stale pre-rename one
+      `TF_STATE_BUCKET`, `KMS_KEY_ID`, or `PLAN_PASSPHRASE` anywhere in the repo's workflows — and
+      the repo's GitHub secrets (`gh secret list` / `gh api .../environments/{env}/secrets`) are
+      actually deleted after cutover, not just unused
+- [ ] OIDC subjects follow the exact formula in [CICD_ROLES.md](CICD_ROLES.md)'s "real OIDC
+      subject list" section — **derived empirically, don't guess by job name**:
+      `github_oidc_plan_subjects` needs `ref:refs/heads/main` + `environment:{org}` +
+      `environment:{org}-approve` (three distinct callers of `get-aws-secrets`, which always
+      authenticates as the plan role); `github_oidc_apply_subjects` needs `ref:refs/heads/main`
+      (apply-decrypt's real apply step sets no `environment:`), plus
+      `environment:{org}-approve` too if the repo has its own extra post-apply job that sets an
+      environment (e.g. `personal-ai-cloud`'s `deploy_portal_files`). Use the repo's **current**
+      name/org, not a stale pre-rename one.
+- [ ] The `{org}-approve` GitHub Environment exists (`gh api repos/{owner}/{repo}/environments/
+      {org}-approve -X PUT`) — and don't expect it to enforce a real pause: required-reviewers and
+      wait-timer protection rules both need a paid GitHub plan on a private repo (confirmed live
+      this session). `deploy.yaml` should be `workflow_dispatch`-only, no `push: branches: [main]`
+      trigger — that's the $0-tier substitute gate.
 - [ ] `expected_account_id`/org/OU IDs (if any) verified against a live AWS API call, not copied
       from another repo, a template, or an SSO URL
 - [ ] Zero BeyondTrust content (grep for `beyondtrust`, `BT-IT-Infrastructure`, `bt-avm`, `bt-dev`,
@@ -137,5 +164,11 @@ different config files for the same environment, in the same repo, in multiple r
       current tree, if the repo has ever committed real credentials/emails)
 - [ ] No dependency on `aws-python-platform-tfctl`/`awsctl-platform-aws`/`cloudctl` until their own
       BeyondTrust-content status is resolved (see "Adjacent tooling" above)
-- [ ] `rhyscraig/aws-terraform-platform-docs` updated in the same change (this repo — see the
+- [ ] Verify locally before pushing, don't round-trip through CI to iterate: `terraform fmt
+      -check`/`validate`, and for Checkov specifically, run the exact CI invocation locally
+      (`checkov -d <dir> --framework terraform --compact --quiet --soft-fail
+      --download-external-modules true --hard-fail-on "CKV_AWS_24,CKV_AWS_25,CKV_AWS_277,
+      CKV_AWS_20,CKV_AWS_57,CKV2_AWS_6,CKV_AWS_17"`) before pushing a fix and burning Actions
+      minutes on a guess.
+- [ ] `hoad-org/aws-terraform-platform-docs` updated in the same change (this repo — see the
       guardrail in [PROVENANCE.md](PROVENANCE.md))

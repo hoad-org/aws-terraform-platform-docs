@@ -22,7 +22,7 @@ on a genuinely brand-new, empty repo (nothing to bypass review of, since there's
 
 ## Update the docs repo alongside every AWS-platform-affecting change
 
-This repo (`rhyscraig/aws-terraform-platform-docs`) is the canonical home of the landing zone
+This repo (`hoad-org/aws-terraform-platform-docs`) is the canonical home of the landing zone
 design — established explicitly, not incidentally. Any change to OIDC roles, secrets, the
 state-backend prefix convention, the account/OU tree, or a reusable workflow's contract must
 update the relevant file here **as part of the same PR**, not as a follow-up. This is enforced by
