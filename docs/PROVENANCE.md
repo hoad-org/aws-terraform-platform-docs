@@ -56,7 +56,7 @@ work — not as a follow-up, not "later."** This includes but isn't limited to:
 - A new or changed reusable workflow in `hoad-org/github-automation`
 
 **How this is enforced**: every repo's own `.claude/CLAUDE.md` (or equivalent orientation doc)
-must instruct Claude to update the relevant file(s) in `rhyscraig/aws-terraform-platform-docs`
+must instruct Claude to update the relevant file(s) in `hoad-org/aws-terraform-platform-docs`
 before considering AWS-platform-affecting work complete. See each repo's own CLAUDE.md for the
 exact instruction text — the canonical wording lives in this repo's own root `README.md`.
 
