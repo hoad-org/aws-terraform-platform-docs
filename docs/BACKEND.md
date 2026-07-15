@@ -13,6 +13,18 @@ One bucket, one KMS key, shared by every repo in the estate — management-accou
 alike. Workloads-account repos reach it via a **cross-account bucket policy + KMS key grant**
 naming their specific plan/apply role ARNs (see [CICD_ROLES.md](CICD_ROLES.md)).
 
+**Real bug, found and fixed 2026-07-15**: `hoad-org/github-automation`'s "Resolve KMS Key ID" step
+(in both `reusable-tf-plan-encrypt.yaml` and `reusable-tf-apply-decrypt.yaml`) used to extract
+`KeyMetadata.KeyId` (a bare UUID, no account qualifier) from `aws kms describe-key` and pass it
+straight to `-backend-config="kms_key_id=..."`. That's fine when the calling OIDC role and the KMS
+key live in the same account (every management-account repo), but for the first genuinely
+cross-account caller (`aws-terraform-solutions-craighoad-blog`, craighoad-prod `624426145233`,
+using the management account's `395101865577` key) AWS silently re-qualified the bare ID against
+the *caller's own account* and returned `KMS.NotFoundException` — confirmed live on a real
+Terraform Plan run (`hoad-org/github-automation#7`). Fixed by using `KeyMetadata.Arn` instead,
+which is unambiguous regardless of which account is calling. Any new cross-account caller
+benefits automatically; no per-repo action needed.
+
 ## State key prefix convention — one real exception, not aspirational
 
 **The rule for most repos**: a repo's Terraform state key is passed explicitly to
