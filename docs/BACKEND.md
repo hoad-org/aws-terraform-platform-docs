@@ -15,11 +15,23 @@ naming their specific plan/apply role ARNs (see [CICD_ROLES.md](CICD_ROLES.md)).
 
 ## State key prefix convention — one real exception, not aspirational
 
-**The rule for most repos**: a repo's Terraform state key prefix is declared **once**, in that
-repo's own config file (`configs/orgs/<org>.tfvars` or equivalent) — never hardcoded into
-`.github/workflows/*.yaml`. The workflow reads the prefix from config and passes it through to
-`terraform init -backend-config`. Hardcoding a prefix into a reusable workflow defeats the entire
-point of it being reusable.
+**The rule for most repos**: a repo's Terraform state key is passed explicitly to
+`hoad-org/github-automation`'s `reusable-tf-plan-encrypt.yaml` / `reusable-tf-apply-decrypt.yaml`
+via the `state_key` input on the `with:` block of the calling job in `.github/workflows/*.yaml`.
+Never rely on the default.
+
+**Real bug, found and fixed 2026-07-15**: until `hoad-org/github-automation#6`, neither reusable
+workflow had a `state_key` input at all — both hardcoded the seed repo's own key
+(`${ORG}/${PARTITION}/control-plane/terraform.tfstate`) with no override, so every caller other
+than the seed itself would silently read/write the seed's own control-plane state file. This was
+caught via a real 403 Forbidden on `aws-terraform-solutions-craighoad-blog`'s first Terraform
+Plan run — that repo's scoped IAM policy correctly rejected access to a state key outside its own
+granted prefix, which is what surfaced the bug instead of it silently corrupting the seed's state.
+A caller with a broader IAM policy would not have been protected. Fixed by adding a `state_key`
+input to both workflows (default = the seed's literal key, kept only for the seed's own backward
+compatibility) — every non-seed caller now passes its own real key explicitly in its `with:`
+block. See `personal-ai-cloud`'s and `aws-terraform-solutions-craighoad-blog`'s `deploy.yaml` for
+the live pattern.
 
 **The prefix shape** — two conventions, for two different classes of repo:
 
@@ -61,10 +73,10 @@ and `website` both deploy into `hcp-craighoad-prod`).
 | `aws-terraform-platform-aws-accounts` | management | `hcp/prd/platform/aws-accounts/eu-west-1/terraform.tfstate` | live |
 | `aws-terraform-platform-aws-baselines` | management | `hcp/prd/platform/aws-baselines/eu-west-1/terraform.tfstate` | live |
 | `aws-terraform-platform-aws-org` | management | `hcp/prd/platform/aws-org/eu-west-1/terraform.tfstate` | live |
-| `aws-terraform-platform-seed` | management | `hcp/aws/control-plane/terraform.tfstate` | live — hardcoded in the reusable workflow, not this convention (see above), migrated from stale `myorg/...` |
-| `personal-ai-cloud` | hcp-craighoad-prod | `workloads/craighoad.com/personal-ai-cloud/terraform.tfstate` | **target** — currently `hcp/prd/personal-ai-cloud/*` (ad-hoc, in the seed repo's cross-account bucket policy) |
+| `aws-terraform-platform-seed` | management | `hcp/aws/control-plane/terraform.tfstate` | live — the one repo allowed to rely on the reusable workflow's default, not this convention (see above), migrated from stale `myorg/...` |
+| `personal-ai-cloud` | craighoad-prod (`624426145233`) | `hcp/prd/personal-ai-cloud/terraform.tfstate` | live — passed explicitly via `state_key` in `deploy-portal.yaml` (ad-hoc naming, doesn't match the `workloads/...` convention below; not yet renamed, low priority since no real CI run has used it yet) |
+| `aws-terraform-solutions-craighoad-blog` | craighoad-prod (`624426145233`) | `hcp/prd/craighoad-website/craighoad-blog/eu-west-1/terraform.tfstate` | live — passed explicitly via `state_key` in `deploy.yaml`/`pr-validate.yml`; real infra is currently still deployed in `hcp-terrorgems-prod`, a known separate mismatch (see `REPOS.md`) |
 | `website-static-html-craighoad.com` | hcp-craighoad-prod | `workloads/craighoad.com/website/terraform.tfstate` | target |
-| `aws-terraform-solutions-craighoad-blog` | hcp-craighoad-prod | `workloads/craighoad.com/blog/terraform.tfstate` | target |
 | `aws-terraform-solutions-terrorgem` | hcp-terrorgems-prod | `workloads/terrorgems/terrorgem/terraform.tfstate` | target |
 
 See [REPOS.md](REPOS.md) for the full per-repo migration checklist.

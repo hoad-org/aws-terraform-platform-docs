@@ -32,8 +32,8 @@ is the actual redesign work — not a green-field build.**
 
 | Repo | Org | Naming OK | Secrets model | State backend (real) | CI health | BT content |
 |---|---|---|---|---|---|---|
-| `aws-terraform-platform-seed` | rhyscraig | ✅ | `github-automation` (new, this session) | `myorg/aws/control-plane/terraform.tfstate` | new workflow, untriggered | **Yes** — `configs/orgs/{bt-avm,bt-dev,fdr-cmc,fdr-gvc}.tfvars` (deleted this session, PR open), README/AI.md still reference BT clone URLs (not yet fixed) |
-| `aws-terraform-platform-docs` | rhyscraig | n/a | n/a | n/a | n/a | this repo |
+| `aws-terraform-platform-seed` | hoad-org | ✅ | `github-automation` | `hcp/aws/control-plane/terraform.tfstate` | green — `deploy.yaml` verified end-to-end (parse-config, plan, approve, apply) | **Yes** — `configs/orgs/{bt-avm,bt-dev,fdr-cmc,fdr-gvc}.tfvars` (deleted), README/AI.md still reference BT clone URLs (not yet fixed) |
+| `aws-terraform-platform-docs` | hoad-org | n/a | n/a | n/a | n/a | this repo |
 | `aws-terraform-platform-aws-accounts` | hoad-org | ✅ | old `aws-workflows` + `AWS_CI_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-accounts/eu-west-1/terraform.tfstate` | drift-check red (3+ failures) | **git history only** — `aws-avm-{audits,security,shared-svcs}@beyondtrust.com`, author `choadbt <choad@beyondtrust.com>` |
 | `aws-terraform-platform-aws-baselines` | rhyscraig | ✅ | old `aws-workflows` + `AWS_CI_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-baselines/eu-west-1/terraform.tfstate` (second dead backend block confirmed and removed — PR #5, ADR-0001) | drift_check red (5/5 failures) | none in current tree |
 | `aws-terraform-platform-aws-org` | hoad-org | ✅ | old `aws-workflows` + `AWS_OIDC_ROLE_ARN`/`GH_PAT` | `hcp/prd/platform/aws-org/eu-west-1/terraform.tfstate` | drift-check red (5/5 failures, every 4h) | **git history only** — author `choadbt <choad@beyondtrust.com>` |

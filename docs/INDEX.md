@@ -12,7 +12,7 @@ Machine-readable lookup. **Read this file first.**
 - **`personal-ai-cloud` and `craighoad-portfolio-website` aren't `aws-terraform-*` prefixed** —
   defensible exceptions (app repos with embedded infra / non-Terraform infra), see
   [REPOS.md](REPOS.md#naming-convention-violations).
-- **The seed repo's own state key** (`myorg/aws/control-plane/terraform.tfstate`) doesn't match
+- **The seed repo's own state key** (`hcp/aws/control-plane/terraform.tfstate`) doesn't match
   the `hcp/prd/platform/{repo}/{region}/` convention used by `aws-accounts`/`aws-baselines`/
   `aws-org` — pre-dates that convention, migrating a root-of-trust repo's live state for cosmetic
   consistency isn't worth the risk, see [BACKEND.md](BACKEND.md).
