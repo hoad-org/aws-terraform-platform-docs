@@ -131,6 +131,15 @@ CI/CD execution role. Fixed to trust the calling management-account OIDC role's 
    switch. Both must show enabled (`aws cloudformation describe-organizations-access`) before
    `CreateStackSet` with `permission_model = SERVICE_MANAGED` will succeed.
 
+**Status: live and confirmed working (2026-07-15).** The stack set instance had been sitting
+tainted since an earlier failed attempt — the seed repo's own first real `deploy.yaml` run through
+the full CI pipeline (Trivy → Checkov → Quality Gate → Plan → Apply) replaced it for real (`1
+added, 0 changed, 1 destroyed`). Confirmed live: `hcp-cmc-euw1-platform-member-role-cicd-role`
+exists in `hcp-craighoad-prod` (624426145233) and is assumable from
+`hcp-cmc-euw1-platform-oidc-role` (the management-account workloads role) — the two-hop chain
+described above is no longer theoretical, a real repo (`personal-ai-cloud`) is bootstrapping
+against it as of this writing.
+
 **Target OU IDs must be real, live-queried values** — see the corrected list in
 [ARCHITECTURE.md](ARCHITECTURE.md). A previous attempt used fabricated OU IDs that didn't exist
 in the Organization at all, which fails with `Target organizational unit could not be found`
