@@ -23,10 +23,13 @@ thing. Different design entirely: GitHub Environment secrets (not Secrets Manage
 **Every one of the following repos currently consumes the older `aws-workflows` repo, either via
 its `rhyscraig/` alias or the `hoad-org/` name directly**: `aws-accounts`, `aws-baselines`,
 `aws-org`, `aws-terraform-platform-aws-templates`, `aws-terraform-platform-aws-modules`,
-`aws-terraform-solutions-terrorgems-platform`, `aws-terraform-solutions-websites`,
+`aws-terraform-solutions-terrorgems-platform`,
 `personal-ai-cloud`. **Zero repos consume `github-automation` yet** except the seed repo's own new
 `deploy.yaml` (this session). **Migrating every caller from `aws-workflows` to `github-automation`
 is the actual redesign work — not a green-field build.**
+
+`aws-terraform-solutions-websites` (previously listed here) has been **retired/archived**
+(2026-07-16) rather than migrated — see "Retired repos" below.
 
 ## Summary table
 
@@ -41,7 +44,6 @@ is the actual redesign work — not a green-field build.**
 | `aws-terraform-platform-aws-modules` | rhyscraig | ✅ | old `aws-workflows`, no deploy (pure module catalog) | none (no backend anywhere — correct, it's a module registry) | green (Dependabot only) | none |
 | `aws-terraform-platform-aws-workflows` | hoad-org | ✅ (but see "central architectural fact" above) | n/a — this **is** the older secrets/workflow provider | n/a | n/a | none directly, but see "Adjacent tooling" below |
 | `aws-terraform-solutions-terrorgems-platform` (renamed from `-terrorgem`) | rhyscraig | ✅ | old `aws-workflows`, many GH secrets incl. app secrets (`JWT_SECRET`, `TMDB_API_KEY`) mixed with infra secrets | root `backend.tf` orphaned/stale; real backends per-environment under `infra/aws/environments/*/backend.tf`; `scripts/deploy.sh` hardcodes a bucket/region that **doesn't match** the CI workflow's region | 2 real failures (Trivy findings, workflow parse error), otherwise green | none |
-| `aws-terraform-solutions-websites` | rhyscraig | ✅ | old `aws-workflows` + `SEED_ROLE_ARN` etc | `backend.hcl` — **yet another distinct bucket-naming convention** (`prd-<account>-eu-west-2-tf-state-bucket`) | **5/5 failures** — blocked by a GitHub **billing lockout**, unresolved ~2.5 months, unrelated to code | none |
 | `aws-terraform-solutions-craighoad-blog` | hoad-org (redirects from rhyscraig) | ✅ | inline `SEED_ROLE_ARN` only, no reusable workflow calls at all | `terraform/backend.tf` (hardcoded) | **never actually executed** except Dependabot | none |
 | `craighoad-portfolio-website` (renamed from `website-static-html-craighoad.com`) | hoad-org | ❌ not `aws-terraform-*` prefixed | unknown — not independently re-audited this pass beyond OIDC trust | unknown | unknown | not re-confirmed |
 | `personal-ai-cloud` | hoad-org | ❌ not `aws-terraform-*` prefixed (defensible exception — app repo with embedded infra) | old `aws-workflows` (`hoad-org/` direct, not the `rhyscraig/` alias) — **not yet migrated to `github-automation` despite that being built this session for it** | `hcp/prd/personal-ai-cloud/*` (target: `workloads/craighoad.com/personal-ai-cloud/`) | 5/5 failures (all within 24h — likely the now-fixed OIDC subject issue, unconfirmed re-run) | none |
@@ -83,6 +85,25 @@ These never granted excess access (a stale subject just never matches) — flagg
 future session doesn't waste time re-discovering that those old names are
 still meaningful.
 
+## Retired repos
+
+- **`aws-terraform-solutions-websites`** — archived 2026-07-16, not migrated to
+  `github-automation`. While auditing its CI/CD migration, found that it defines an S3 bucket +
+  CloudFront distribution + Route53 records for `www.craighoad.com`/`craighoad.com`, targeting AWS
+  account `767828739298` (terrorgems) via `terraform.tfvars`' `prod_account_id`. That account has
+  no matching state bucket and never had these resources — the repo's Terraform had in fact never
+  been successfully applied there (CI had been failing since 2026-03-28, most recently on a stale
+  GitHub billing lockout from before the `hoad-org` transfer, unrelated to the account-ID bug).
+  Live-queried the real `craighoad.com` infrastructure instead: the actual, currently-serving S3
+  bucket + CloudFront distribution + Route53 zone live in account `624426145233` (craighoad-prod),
+  tagged `Repo: website-static-html-craighoad.com` (the old name for what's now
+  `hoad-org/craighoad-portfolio-website` — a **separate repo** that already owns and manages this
+  domain). Fixing this repo's account ID and applying it for real would have attempted to create
+  resources with the same names as ones already live under a different repo's Terraform state — a
+  real collision risk to the live site. The repo's other configured domain,
+  `cobwebsandcorridors.com`, has no hosted zone anywhere in the org and doesn't resolve — dormant/
+  unclaimed, not worth salvaging on its own. Retired rather than partially fixed.
+
 ## Naming convention violations
 
 - `craighoad-portfolio-website` — not `aws-terraform-*` prefixed, despite provisioning real AWS
@@ -100,9 +121,10 @@ still meaningful.
 3. **`aws-accounts`** — drift-check failing (3/5 recent).
 4. **`personal-ai-cloud`** — deploy failing 5/5 in the last 24h, likely the now-fixed OIDC subject
    gap, unconfirmed by re-run.
-5. **`aws-terraform-solutions-websites`** — fully blocked by a GitHub billing lockout, unrelated to
-   code, unresolved ~2.5 months.
-6. **`aws-terraform-solutions-craighoad-blog`** — has never executed even once outside Dependabot.
+5. **`aws-terraform-solutions-craighoad-blog`** — has never executed even once outside Dependabot.
+
+(`aws-terraform-solutions-websites` was on this list — retired/archived instead, see "Retired
+repos" below.)
 
 All the `drift-check`/`drift_check` failures across `aws-org`/`aws-baselines`/`aws-accounts`
 complete in **0 seconds** — consistent with a fast pre-flight failure (auth/OIDC/secrets
@@ -115,7 +137,8 @@ At least **four distinct state-bucket-naming conventions** coexist: `hcp-cmc-euw
 `infra-tfstate-hoad-org-seed` (referenced in `environments.yml`/`.tfctl.yml` in those same repos,
 but not matching their actual `backend.tf` — looks like dead/legacy config, not confirmed dead),
 `bt-terraform-remote-state-{region}` (`aws-terraform-platform-aws-templates`'s `.tfctl.yml`), and
-`prd-<account>-eu-west-2-tf-state-bucket` (`aws-terraform-solutions-websites`'s `backend.hcl`).
+`prd-<account>-eu-west-2-tf-state-bucket` (`aws-terraform-solutions-websites`'s `backend.hcl` — that
+repo is now retired, see "Retired repos" above; this bucket never actually existed).
 Region values disagree within single repos too (`eu-west-1` vs `eu-west-2` vs `us-east-1` cited in
 different config files for the same environment, in the same repo, in multiple repos).
 

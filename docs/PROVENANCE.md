@@ -62,11 +62,12 @@ exact instruction text — the canonical wording lives in this repo's own root `
 
 **Audit status**: this guardrail is now in every `aws-terraform-*` repo's `CLAUDE.md` that's
 locally cloneable — `aws-terraform-platform-seed`, `aws-accounts`, `aws-baselines`, `aws-org`,
-`aws-terraform-solutions-terrorgems-platform`, `aws-terraform-solutions-websites`,
+`aws-terraform-solutions-terrorgems-platform`,
 `aws-terraform-solutions-craighoad-blog`, `hoad-org/personal-ai-cloud`,
-`hoad-org/github-automation` (9 repos, each its own PR, none merged yet — check each repo's own
+`hoad-org/github-automation` (8 repos, each its own PR, none merged yet — check each repo's own
 open PRs before assuming this is live everywhere). `craighoad-portfolio-website` wasn't locally
-cloned this session, not yet audited.
+cloned this session, not yet audited. `aws-terraform-solutions-websites` was in this list
+previously — now retired/archived, see item 6 below and REPOS.md's "Retired repos".
 
 ## Known cross-repo inconsistencies found during the audit that produced this documentation
 
@@ -104,11 +105,19 @@ listed here so they're not lost. See [REPOS.md](REPOS.md) for per-repo detail.
    `github.com/rhyscraig/awsctl.git` — neither repo exists under those exact names (real names:
    `aws-python-platform-tfctl`, `awsctl-platform-aws`). These installs are broken regardless of
    the BeyondTrust-branding question above.
-6. **A billing lockout has blocked `aws-terraform-solutions-websites`'s CI for ~2.5 months**,
-   unrelated to any code — GitHub Actions itself refused to start jobs
-   ("recent account payments have failed or your spending limit needs to be increased"). Simple to
-   fix once noticed; flagged here because it's exactly the kind of thing this audit exists to
-   surface, not because it's architecturally interesting.
+6. **`aws-terraform-solutions-websites` retired, not migrated (2026-07-16)**: the billing lockout
+   noted below turned out to be the least of this repo's problems. Its `prod_account_id`
+   (`767828739298`, terrorgems) was simply wrong — no matching state bucket ever existed there, and
+   the real, live `craighoad.com` S3 bucket/CloudFront/Route53 resources this repo also defines
+   already exist and are actively managed by a *different* repo
+   (`hoad-org/craighoad-portfolio-website`) in account `624426145233`. Fixing the account ID and
+   applying for real would have collided with that already-live, differently-tracked
+   infrastructure. Its other domain, `cobwebsandcorridors.com`, has no hosted zone anywhere in the
+   org and doesn't resolve — dormant. Archived rather than migrated; see REPOS.md's "Retired
+   repos". The original billing-lockout finding, now moot: GitHub Actions itself refused to start
+   jobs for ~2.5 months ("recent account payments have failed or your spending limit needs to be
+   increased") — unrelated to the account-ID bug, and would have masked it indefinitely had CI kept
+   running.
 7. **Two stale OIDC trust subjects** in the seed repo's legacy `github_oidc_subjects` — **fixed**:
    removed the dead `aws-terraform-solutions-terrorgem`/`website-static-html-craighoad.com`
    entries (renamed/transferred repos, already trusted separately under their real current
